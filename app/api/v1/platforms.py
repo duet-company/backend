@@ -2,10 +2,12 @@
 Platforms API - Platform management endpoints
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import logging
+
+from app.core.security import get_current_active_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -34,13 +36,15 @@ platforms_db = {}
 
 
 @router.post("/", response_model=PlatformResponse)
-async def create_platform(request: PlatformRequest):
+async def create_platform(request: PlatformRequest, current_user: dict = Depends(get_current_active_user)):
     """
     Create a new analytics platform
 
     - Triggers AI agent to design platform
     - Deploys infrastructure (ClickHouse, dashboards)
     - Returns platform details
+
+    **Authentication required**
     """
     try:
         logger.info(f"Creating platform: {request.name}")
@@ -69,22 +73,31 @@ async def create_platform(request: PlatformRequest):
 
 
 @router.get("/", response_model=List[PlatformResponse])
-async def list_platforms():
-    """List all platforms for current user"""
+async def list_platforms(current_user: dict = Depends(get_current_active_user)):
+    """List all platforms for current user
+
+    **Authentication required**
+    """
     return list(platforms_db.values())
 
 
 @router.get("/{platform_id}", response_model=PlatformResponse)
-async def get_platform(platform_id: str):
-    """Get platform details by ID"""
+async def get_platform(platform_id: str, current_user: dict = Depends(get_current_active_user)):
+    """Get platform details by ID
+
+    **Authentication required**
+    """
     if platform_id not in platforms_db:
         raise HTTPException(status_code=404, detail="Platform not found")
     return platforms_db[platform_id]
 
 
 @router.delete("/{platform_id}")
-async def delete_platform(platform_id: str):
-    """Delete a platform"""
+async def delete_platform(platform_id: str, current_user: dict = Depends(get_current_active_user)):
+    """Delete a platform
+
+    **Authentication required**
+    """
     if platform_id not in platforms_db:
         raise HTTPException(status_code=404, detail="Platform not found")
     del platforms_db[platform_id]
@@ -93,7 +106,7 @@ async def delete_platform(platform_id: str):
 
 
 @router.post("/{platform_id}/query")
-async def query_platform(platform_id: str, natural_query: str):
+async def query_platform(platform_id: str, natural_query: str, current_user: dict = Depends(get_current_active_user)):
     """
     Query platform using natural language
 
@@ -101,6 +114,8 @@ async def query_platform(platform_id: str, natural_query: str):
     - Generates SQL using Query Agent
     - Executes query on ClickHouse
     - Returns results
+
+    **Authentication required**
     """
     if platform_id not in platforms_db:
         raise HTTPException(status_code=404, detail="Platform not found")
