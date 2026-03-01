@@ -70,7 +70,7 @@ async def health_check():
 
 
 # Import routers
-from app.api.v1 import platforms, agents, data, monitoring
+from app.api.v1 import platforms, agents, data, monitoring, schema
 from app.auth import router as auth_router
 
 # Register routers
@@ -79,6 +79,7 @@ app.include_router(platforms.router, prefix="/api/v1/platforms", tags=["platform
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(data.router, prefix="/api/v1/data", tags=["data"])
 app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["monitoring"])
+app.include_router(schema.router, prefix="/api/v1/schema", tags=["schema"])
 
 
 @app.get("/")

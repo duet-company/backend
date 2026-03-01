@@ -6,9 +6,7 @@ SQLAlchemy model for user authentication and management.
 
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from app.core.database import Base
 
 
 class User(Base):
