@@ -9,6 +9,7 @@ from app.models.user import User
 from app.models.query import Query, QueryStatus, QueryType
 from app.models.schema import Schema, Table, Column
 from app.models.data_source import DataSource, DataSourceType, DataSourceStatus
+from app.models.chat import Chat
 
 __all__ = [
     "Base",
@@ -22,4 +23,5 @@ __all__ = [
     "DataSource",
     "DataSourceType",
     "DataSourceStatus",
+    "Chat",
 ]
