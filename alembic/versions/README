@@ -1,0 +1,16 @@
+This directory holds Alembic migration scripts for the AI Data Labs backend.
+
+Migration files are generated automatically by running:
+    alembic revision --autogenerate -m "description of changes"
+
+To apply migrations:
+    alembic upgrade head
+
+To rollback migrations:
+    alembic downgrade -1
+
+To check current version:
+    alembic current
+
+To see migration history:
+    alembic history
