@@ -72,6 +72,7 @@ async def health_check():
 # Import routers
 from app.api.v1 import platforms, agents, data, monitoring, schema
 from app.auth import router as auth_router
+from app.agents import registry
 
 # Register routers
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
@@ -80,6 +81,35 @@ app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(data.router, prefix="/api/v1/data", tags=["data"])
 app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["monitoring"])
 app.include_router(schema.router, prefix="/api/v1/schema", tags=["schema"])
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup."""
+    logger.info("Starting AI Data Labs API...")
+
+    # Initialize AI agents
+    try:
+        await registry.initialize_all()
+        logger.info(f"Initialized {len(registry.get_all())} AI agents")
+    except Exception as e:
+        logger.error(f"Failed to initialize agents: {e}")
+
+    logger.info("API ready to serve requests")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown."""
+    logger.info("Shutting down AI Data Labs API...")
+
+    # Shutdown AI agents
+    try:
+        await registry.shutdown_all()
+    except Exception as e:
+        logger.error(f"Error shutting down agents: {e}")
+
+    logger.info("API shutdown complete")
 
 
 @app.get("/")
