@@ -4,10 +4,16 @@ AI Data Labs - Main API Application
 FastAPI application with AI agent orchestration for data analytics.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
 import logging
+import time
+
+# Import metrics
+from app.core.metrics import (
+    MetricsContext, initialize_metrics, start_metrics_server
+)
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +43,21 @@ app.add_middleware(
 # Prometheus metrics
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
+
+
+@app.middleware("http")
+async def monitor_requests(request: Request, call_next):
+    """Middleware to monitor all HTTP requests."""
+    method = request.method
+    path = request.url.path
+
+    # Skip health checks and metrics from detailed monitoring
+    if path in ["/health", "/health/ready", "/health/live", "/metrics"]:
+        return await call_next(request)
+
+    with MetricsContext(method, path):
+        response = await call_next(request)
+    return response
 
 
 @app.on_event("startup")
@@ -88,6 +109,16 @@ app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 async def startup_event():
     """Initialize services on startup."""
     logger.info("Starting AI Data Labs API...")
+
+    # Initialize metrics
+    try:
+        import os
+        build_version = os.getenv("BUILD_VERSION", "0.1.0")
+        git_commit = os.getenv("GIT_COMMIT", "dev")
+        initialize_metrics(build_version=build_version, git_commit=git_commit)
+        logger.info("Metrics initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize metrics: {e}")
 
     # Initialize AI agents
     try:
