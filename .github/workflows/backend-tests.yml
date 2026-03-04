@@ -1,0 +1,115 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      clickhouse:
+        image: clickhouse/clickhouse-server:23.8
+        ports:
+          - 8123:8123
+        options: >-
+          --health-cmd "curl -f http://localhost:8123/ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:test@localhost:5432/test_db
+      CLICKHOUSE_URL: clickhouse://localhost:8123/default
+      JWT_SECRET_KEY: test-secret-key-for-testing-only
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      OPENAI_API_KEY: sk-test-key-not-real
+      ANTHROPIC_API_KEY: sk-ant-test-key-not-real
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio pytest-xdist httpx
+
+      - name: Run unit tests
+        run: |
+          pytest tests/ -m unit -v --cov=app --cov-report=xml --cov-report=term
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -m integration -v --cov=app --cov-append
+
+      - name: Run e2e tests
+        run: |
+          pytest tests/integration/ -m e2e -v --cov=app --cov-append
+
+      - name: Run security tests
+        run: |
+          pytest tests/ -m security -v --cov=app --cov-append
+
+      - name: Run performance tests (optional)
+        if: github.event_name == 'push' # Only run on push, not PRs
+        run: |
+          pytest tests/performance/ -m performance -v --cov=app --cov-append
+
+      - name: Generate coverage report
+        run: |
+          pytest tests/ --cov=app --cov-report=html --cov-report=xml --cov-report=term
+
+      - name: Generate test reports
+        run: |
+          python tests/test_report_generator.py --output-dir .
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.run_number }}
+          path: |
+            test-report.json
+            test-report.md
+            htmlcov/
+            coverage.xml
+          retention-days: 30
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+      - name: Check test results
+        run: |
+          # Fail if tests failed
+          if [ ! -f test-report.json ]; then
+            echo "Test report not generated!"
+            exit 1
+          fi
+          python3 -c "import json; report=json.load(open('test-report.json')); exit(0 if report['summary']['failed']==0 else 1)"
