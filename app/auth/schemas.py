@@ -7,6 +7,7 @@ Pydantic models for authentication and user management.
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
+from app.core.security import TokenData
 
 
 class UserCreate(BaseModel):
@@ -76,10 +77,7 @@ class Token(BaseModel):
         }
 
 
-class TokenData(BaseModel):
-    """Schema for token data (extracted from JWT)."""
-    email: Optional[str] = None
-    user_id: Optional[int] = None
+# TokenData is now defined in app/core/security.py to avoid circular imports
 
 
 class PasswordReset(BaseModel):

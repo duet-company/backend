@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from pydantic import BaseModel
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from app.auth.schemas import TokenData
 import os
 
 # Password hashing context
@@ -23,6 +23,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+
+
+class TokenData(BaseModel):
+    """Schema for token data (extracted from JWT)."""
+    email: Optional[str] = None
+    user_id: Optional[int] = None
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
