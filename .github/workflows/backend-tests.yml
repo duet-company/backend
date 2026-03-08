@@ -61,20 +61,20 @@ jobs:
 
       - name: Run integration tests
         run: |
-          PYTHONPATH=. pytest tests/integration/ -m integration -v --cov=app --cov-append
+          PYTHONPATH=. pytest tests/integration/ -m integration -v --cov=app --cov-append -p tests.test_report_generator
 
       - name: Run e2e tests
         run: |
-          PYTHONPATH=. pytest tests/integration/ -m e2e -v --cov=app --cov-append
+          PYTHONPATH=. pytest tests/integration/ -m e2e -v --cov=app --cov-append -p tests.test_report_generator
 
       - name: Run security tests
         run: |
-          PYTHONPATH=. pytest tests/ -m security -v --cov=app --cov-append
+          PYTHONPATH=. pytest tests/ -m security -v --cov=app --cov-append -p tests.test_report_generator
 
       - name: Run performance tests (optional)
         if: github.event_name == 'push' # Only run on push, not PRs
         run: |
-          PYTHONPATH=. pytest tests/performance/ -m performance -v --cov=app --cov-append
+          PYTHONPATH=. pytest tests/performance/ -m performance -v --cov=app --cov-append -p tests.test_report_generator
 
       - name: Generate coverage report
         run: |
