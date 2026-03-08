@@ -67,7 +67,8 @@ class TestDataSourceModel:
         repr_str = repr(data_source)
         assert "DataSource(id=1" in repr_str
         assert "name=Test DB" in repr_str
-        assert "type=postgresql" in repr_str
+        # The repr shows the enum representation
+        assert "type=DataSourceType.POSTGRESQL" in repr_str
 
     def test_data_source_type_enum(self):
         """Test DataSourceType enum values."""

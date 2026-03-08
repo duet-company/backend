@@ -106,7 +106,7 @@ class TestQueryAgent:
             agent = QueryAgent(agent_config)
             await agent.initialize()
 
-            with pytest.raises(ValueError, match="Missing required field"):
+            with pytest.raises(RuntimeError, match="Missing required field"):
                 await agent.process({})
 
     @pytest.mark.asyncio

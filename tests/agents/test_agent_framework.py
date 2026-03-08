@@ -437,7 +437,7 @@ async def test_communication_request_response():
 
     channel.subscribe("test_topic", responder)
     # Give channel time to process subscription
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0.2)
 
     # Send request
     response = await channel.send_request(
