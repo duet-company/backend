@@ -404,7 +404,7 @@ async def generate_sql(schema_id: str, current_user: dict = Depends(get_current_
 -- Created: {schema.created_at}
 
 CREATE TABLE IF NOT EXISTS {schema.name} (
-{',\\n'.join(field_defs)}
+{chr(10).join(field_defs)}
 ) ENGINE = MergeTree()
 ORDER BY ({', '.join([f.name for f in schema.fields if f.primary_key])});
 """

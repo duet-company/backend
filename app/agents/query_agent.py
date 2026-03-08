@@ -12,7 +12,6 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import httpx
 from clickhouse_driver import Client as ClickHouseClient
-from clickhouse_driver.errors import ClickHouseError
 
 from app.agents.base import BaseAgent, AgentConfig, AgentStatus
 from app.models.query import Query as QueryModel, QueryStatus, QueryType
@@ -111,7 +110,7 @@ class ClickHouseSchemaLoader:
 
             logger.info(f"Schema fetched: {len(schema['tables'])} tables")
 
-        except ClickHouseError as e:
+        except Exception as e:
             logger.error(f"Failed to fetch schema: {e}")
             raise
 
@@ -430,7 +429,7 @@ Rules:
 
             return rows, column_names, exec_time_ms
 
-        except ClickHouseError as e:
+        except Exception as e:
             logger.error(f"ClickHouse query failed: {e}")
             raise RuntimeError(f"Query execution failed: {e}")
 

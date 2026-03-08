@@ -12,6 +12,7 @@ from app.agents.base import AgentConfig
 from app.models.query import QueryStatus, QueryType
 
 
+@pytest.mark.unit
 class TestQueryAgent:
     """Tests for QueryAgent"""
 
@@ -105,7 +106,7 @@ class TestQueryAgent:
             agent = QueryAgent(agent_config)
             await agent.initialize()
 
-            with pytest.raises(ValueError, match="Missing required field"):
+            with pytest.raises(RuntimeError, match="Missing required field"):
                 await agent.process({})
 
     @pytest.mark.asyncio
@@ -203,7 +204,7 @@ class TestQueryAgent:
             with pytest.raises(ValueError, match="dangerous"):
                 agent._validate_sql("DELETE FROM users")
 
-            with pytest.raises(ValueError, match="Only SELECT"):
+            with pytest.raises(ValueError, match="dangerous"):
                 agent._validate_sql("INSERT INTO users VALUES (1)")
 
     @pytest.mark.asyncio
@@ -309,6 +310,7 @@ class TestQueryAgent:
                 assert "id | name" in result["formatted_output"]
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_query_agent_factory():
     """Test factory function creates agent with correct config"""

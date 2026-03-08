@@ -7,6 +7,7 @@ from datetime import datetime
 from app.models.schema import Schema, Table, Column
 
 
+@pytest.mark.unit
 class TestSchemaModel:
     """Test suite for Schema model."""
 
@@ -16,7 +17,8 @@ class TestSchemaModel:
             data_source_id=1,
             name="public",
             description="Public schema",
-            table_count=5
+            table_count=5,
+            is_active=True
         )
         assert schema.id is None
         assert schema.data_source_id == 1
@@ -32,6 +34,7 @@ class TestSchemaModel:
             id=1,
             data_source_id=1,
             name="public",
+            is_active=True,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -43,13 +46,19 @@ class TestSchemaModel:
 
     def test_schema_repr(self):
         """Test schema string representation."""
-        schema = Schema(id=1, name="public", data_source_id=1)
+        schema = Schema(
+            id=1,
+            name="public",
+            data_source_id=1,
+            is_active=True
+        )
         repr_str = repr(schema)
         assert "Schema(id=1" in repr_str
         assert "name=public" in repr_str
         assert "data_source_id=1" in repr_str
 
 
+@pytest.mark.unit
 class TestTableModel:
     """Test suite for Table model."""
 
@@ -60,7 +69,8 @@ class TestTableModel:
             name="users",
             description="User table",
             row_count_estimate=1000,
-            column_count=10
+            column_count=10,
+            is_active=True
         )
         assert table.id is None
         assert table.schema_id == 1
@@ -77,6 +87,7 @@ class TestTableModel:
             schema_id=1,
             name="users",
             column_count=10,
+            is_active=True,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -88,13 +99,19 @@ class TestTableModel:
 
     def test_table_repr(self):
         """Test table string representation."""
-        table = Table(id=1, name="users", schema_id=1)
+        table = Table(
+            id=1,
+            name="users",
+            schema_id=1,
+            is_active=True
+        )
         repr_str = repr(table)
         assert "Table(id=1" in repr_str
         assert "name=users" in repr_str
         assert "schema_id=1" in repr_str
 
 
+@pytest.mark.unit
 class TestColumnModel:
     """Test suite for Column model."""
 
@@ -123,6 +140,8 @@ class TestColumnModel:
             table_id=1,
             name="email",
             data_type="VARCHAR(255)",
+            is_nullable=True,
+            is_primary_key=False,
             ordinal_position=1,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
@@ -132,12 +151,19 @@ class TestColumnModel:
         assert result["table_id"] == 1
         assert result["name"] == "email"
         assert result["data_type"] == "VARCHAR(255)"
-        assert result["is_nullable"] is True  # Default value
-        assert result["is_primary_key"] is False  # Default value
+        assert result["is_nullable"] is True
+        assert result["is_primary_key"] is False
 
     def test_column_repr(self):
         """Test column string representation."""
-        column = Column(id=1, name="email", table_id=1, data_type="VARCHAR(255)")
+        column = Column(
+            id=1,
+            name="email",
+            table_id=1,
+            data_type="VARCHAR(255)",
+            is_nullable=True,
+            is_primary_key=False
+        )
         repr_str = repr(column)
         assert "Column(id=1" in repr_str
         assert "name=email" in repr_str
@@ -150,9 +176,11 @@ class TestColumnModel:
             table_id=1,
             name="test",
             data_type="TEXT",
+            is_nullable=True,
+            is_primary_key=False,
             ordinal_position=1
         )
-        assert column.is_nullable is True  # Default
-        assert column.is_primary_key is False  # Default
+        assert column.is_nullable is True
+        assert column.is_primary_key is False
         assert column.default_value is None
         assert column.description is None

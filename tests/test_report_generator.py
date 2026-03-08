@@ -250,22 +250,79 @@ report_generator = TestReportGenerator()
 
 
 def pytest_runtest_makereport(item, call):
-    """Pytest hook to collect test results."""
-    if call.when == "call":
-        status = "passed" if call.excinfo is None else "failed"
+    """Pytest hook to collect test results.
+
+    Handles all test phases: setup, call, and teardown.
+    Skipped tests are skipped during setup, so we check that phase first.
+    """
+    # Track if we've already recorded this test (to avoid duplicates)
+    if hasattr(item, '_report_recorded'):
+        return
+
+    status = None
+    duration = call.duration if hasattr(call, 'duration') else 0
+    error_message = ""
+
+    if call.when == "setup":
+        # Handle tests skipped during setup
+        if hasattr(call, 'excinfo') and call.excinfo is not None:
+            if hasattr(call.excinfo, 'value'):
+                # Check if it's a skip exception
+                if call.excinfo.typename == "Skipped":
+                    status = "skipped"
+                    error_message = str(call.excinfo.value) if hasattr(call.excinfo.value, '__str__') else ""
+                # Check if it's an error during setup
+                elif call.excinfo.typename in ["Error", "Exception", "SetupError"]:
+                    status = "error"
+                    error_message = f"{call.excinfo.typename}: {call.excinfo.value}"
+
+    elif call.when == "call":
+        # Handle normal test execution
+        if hasattr(call, 'excinfo'):
+            if call.excinfo is None:
+                status = "passed"
+            else:
+                # Check if it's an explicit skip during call
+                if call.excinfo.typename == "Skipped":
+                    status = "skipped"
+                    error_message = str(call.excinfo.value) if hasattr(call.excinfo.value, '__str__') else ""
+                # Check if it's an error
+                elif call.excinfo.typename == "Error":
+                    status = "error"
+                    error_message = f"{call.excinfo.typename}: {call.excinfo.value}"
+                # Otherwise it's a failure
+                else:
+                    status = "failed"
+                    error_message = str(call.excinfo.value) if hasattr(call.excinfo.value, '__str__') else ""
+        else:
+            status = "passed"
+
+    elif call.when == "teardown":
+        # Handle errors during teardown
+        if hasattr(call, 'excinfo') and call.excinfo is not None:
+            status = "error"
+            error_message = f"Teardown {call.excinfo.typename}: {call.excinfo.value}"
+            duration = call.duration if hasattr(call, 'duration') else 0
+
+    # Only record if we determined a status
+    if status is not None:
         markers = [marker.name for marker in item.iter_markers()]
-        
+
         # Extract performance data from test report if available
         if hasattr(call, "result") and call.result:
             # Try to extract performance metrics from test output
             pass
-        
+
         report_generator.add_result(
             name=item.nodeid,
             status=status,
-            duration=call.duration if hasattr(call, 'duration') else 0,
-            markers=markers
+            duration=duration,
+            markers=markers,
+            error=error_message
         )
+
+        # Mark this test as recorded to avoid duplicates
+        item._report_recorded = True
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):

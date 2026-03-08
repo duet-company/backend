@@ -89,6 +89,7 @@ def client(db_session: Session):
     app.dependency_overrides.clear()
 
 
+@pytest.mark.integration
 class TestChatModel:
     """Tests for Chat model."""
 
@@ -170,6 +171,7 @@ class TestChatModel:
         assert last_3[2]["content"] == "Message 5"
 
 
+@pytest.mark.integration
 class TestChatAPI:
     """Tests for Chat API endpoints."""
 
@@ -206,6 +208,7 @@ class TestChatAPI:
         assert response.status_code == 401
 
 
+@pytest.mark.integration
 class TestChatMessageHandling:
     """Tests for chat message handling."""
 
