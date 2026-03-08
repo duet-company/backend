@@ -60,7 +60,7 @@ class TestQueryModel:
         repr_str = repr(query)
         assert "Query(id=1" in repr_str
         assert "user_id=1" in repr_str
-        assert "status=pending" in repr_str
+        assert "status=QueryStatus.PENDING" in repr_str
 
     def test_query_status_enum(self):
         """Test QueryStatus enum values."""

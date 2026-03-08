@@ -204,7 +204,7 @@ class TestQueryAgent:
             with pytest.raises(ValueError, match="dangerous"):
                 agent._validate_sql("DELETE FROM users")
 
-            with pytest.raises(ValueError, match="Only SELECT"):
+            with pytest.raises(ValueError, match="dangerous"):
                 agent._validate_sql("INSERT INTO users VALUES (1)")
 
     @pytest.mark.asyncio

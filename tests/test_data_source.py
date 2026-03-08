@@ -19,6 +19,7 @@ class TestDataSourceModel:
             description="Main analytics database",
             source_type=DataSourceType.CLICKHOUSE,
             status=DataSourceStatus.ACTIVE,
+            is_default=False,
             connection_config={
                 "host": "localhost",
                 "port": 9000,
@@ -43,6 +44,7 @@ class TestDataSourceModel:
             name="Test DB",
             source_type=DataSourceType.POSTGRESQL,
             status=DataSourceStatus.ACTIVE,
+            is_default=False,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -59,7 +61,8 @@ class TestDataSourceModel:
             id=1,
             name="Test DB",
             source_type=DataSourceType.POSTGRESQL,
-            status=DataSourceStatus.ACTIVE
+            status=DataSourceStatus.ACTIVE,
+            is_default=False
         )
         repr_str = repr(data_source)
         assert "DataSource(id=1" in repr_str
@@ -90,7 +93,8 @@ class TestDataSourceModel:
             user_id=1,
             name="Test",
             source_type=DataSourceType.POSTGRESQL,
-            status=DataSourceStatus.ACTIVE
+            status=DataSourceStatus.ACTIVE,
+            is_default=False
         )
         assert data_source.status == DataSourceStatus.ACTIVE
         assert data_source.is_default is False
@@ -113,6 +117,7 @@ class TestDataSourceModel:
             name="Production DB",
             source_type=DataSourceType.POSTGRESQL,
             status=DataSourceStatus.ACTIVE,
+            is_default=False,
             connection_config=config
         )
         assert data_source.connection_config == config

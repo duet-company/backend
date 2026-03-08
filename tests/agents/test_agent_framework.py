@@ -134,7 +134,7 @@ async def test_agent_timeout():
             await asyncio.sleep(2.0)
             return {"result": "done"}
 
-    config = AgentConfig(name="slow_agent", timeout_seconds=0.5)
+    config = AgentConfig(name="slow_agent", timeout_seconds=1)  # Use integer seconds
     agent = SlowAgent(config)
 
     await agent.initialize()
@@ -155,6 +155,8 @@ async def test_agent_concurrent_tasks_limit():
     # Start two tasks
     task1 = asyncio.create_task(agent.process({"value": "1"}))
     task2 = asyncio.create_task(agent.process({"value": "2"}))
+    # Allow tasks to start and increment active count
+    await asyncio.sleep(0.01)
 
     assert agent.active_tasks == 2
 
@@ -434,6 +436,8 @@ async def test_communication_request_response():
             )
 
     channel.subscribe("test_topic", responder)
+    # Give channel time to process subscription
+    await asyncio.sleep(0.05)
 
     # Send request
     response = await channel.send_request(
@@ -464,7 +468,7 @@ async def test_communication_request_timeout():
             topic="test_topic",
             payload={},
             sender="requester",
-            timeout=0.5
+            timeout=1  # Integer seconds for pydantic validation
         )
 
     await channel.stop()
