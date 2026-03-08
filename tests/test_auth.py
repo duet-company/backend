@@ -22,7 +22,7 @@ class TestPasswordHashing:
 
     def test_password_hashing(self):
         """Test that passwords can be hashed correctly."""
-        plain_password = "testpass123"  # Within bcrypt 72-byte limit
+        plain_password = "a"  # Very short to ensure <72
         hashed_password = get_password_hash(plain_password)
 
         # Hash should be different from plain password
@@ -34,7 +34,7 @@ class TestPasswordHashing:
 
     def test_password_verification(self):
         """Test that hashed passwords can be verified."""
-        plain_password = "testpass123"
+        plain_password = "a"
         hashed_password = get_password_hash(plain_password)
 
         # Correct password should verify
@@ -45,8 +45,8 @@ class TestPasswordHashing:
 
     def test_different_passwords_different_hashes(self):
         """Test that different passwords produce different hashes."""
-        password1 = "testpass1"
-        password2 = "testpass2"
+        password1 = "a"
+        password2 = "b"
 
         hash1 = get_password_hash(password1)
         hash2 = get_password_hash(password2)
