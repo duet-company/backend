@@ -7,6 +7,7 @@ from datetime import datetime
 from app.models.schema import Schema, Table, Column
 
 
+@pytest.mark.unit
 class TestSchemaModel:
     """Test suite for Schema model."""
 
@@ -50,6 +51,7 @@ class TestSchemaModel:
         assert "data_source_id=1" in repr_str
 
 
+@pytest.mark.unit
 class TestTableModel:
     """Test suite for Table model."""
 
@@ -95,6 +97,7 @@ class TestTableModel:
         assert "schema_id=1" in repr_str
 
 
+@pytest.mark.unit
 class TestColumnModel:
     """Test suite for Column model."""
 

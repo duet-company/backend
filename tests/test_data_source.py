@@ -7,6 +7,7 @@ from datetime import datetime
 from app.models.data_source import DataSource, DataSourceType, DataSourceStatus
 
 
+@pytest.mark.unit
 class TestDataSourceModel:
     """Test suite for DataSource model."""
 

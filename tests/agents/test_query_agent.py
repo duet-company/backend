@@ -12,6 +12,7 @@ from app.agents.base import AgentConfig
 from app.models.query import QueryStatus, QueryType
 
 
+@pytest.mark.unit
 class TestQueryAgent:
     """Tests for QueryAgent"""
 
@@ -309,6 +310,7 @@ class TestQueryAgent:
                 assert "id | name" in result["formatted_output"]
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_query_agent_factory():
     """Test factory function creates agent with correct config"""

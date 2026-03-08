@@ -38,6 +38,7 @@ class TestAgent(BaseAgent):
         return {"result": f"processed: {input_data.get('value', '')}"}
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_agent_initialization():
     """Test agent initialization"""
@@ -53,6 +54,7 @@ async def test_agent_initialization():
     assert agent.initialized is True
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_agent_shutdown():
     """Test agent shutdown"""
@@ -66,6 +68,7 @@ async def test_agent_shutdown():
     assert agent.shutdown_called is True
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_agent_process():
     """Test agent processing"""
@@ -80,6 +83,7 @@ async def test_agent_process():
     assert agent._total_tasks_processed == 1
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_agent_retry_logic():
     """Test agent retry logic on failure"""
@@ -115,6 +119,7 @@ async def test_agent_retry_logic():
     assert agent._total_errors == 1
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_agent_timeout():
     """Test agent timeout handling"""
@@ -138,6 +143,7 @@ async def test_agent_timeout():
         await agent.process({})
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_agent_concurrent_tasks_limit():
     """Test agent concurrent task limit"""
@@ -162,6 +168,7 @@ async def test_agent_concurrent_tasks_limit():
     assert agent.active_tasks == 0
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_agent_health_check():
     """Test agent health check"""
@@ -180,6 +187,7 @@ async def test_agent_health_check():
 
 # ===== Test AgentRegistry =====
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_registry_registration():
     """Test agent registration"""
@@ -194,6 +202,7 @@ async def test_registry_registration():
     assert retrieved.config.name == "test_agent"
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_registry_class_registration():
     """Test agent class registration and instantiation"""
@@ -206,6 +215,7 @@ async def test_registry_class_registration():
     assert "test_agent" in registry._configs
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_registry_create_and_register():
     """Test creating agent from registered class"""
@@ -220,6 +230,7 @@ async def test_registry_create_and_register():
     assert "test_agent" in registry._agents
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_registry_unregister():
     """Test agent unregistration"""
@@ -237,6 +248,7 @@ async def test_registry_unregister():
     assert agent.status == AgentStatus.SHUTDOWN
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_registry_list_agents():
     """Test listing agents"""
@@ -262,6 +274,7 @@ async def test_registry_list_agents():
     assert enabled_agents[0]["name"] == "agent1"
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_registry_initialize_all():
     """Test initializing all registered agents"""
@@ -283,6 +296,7 @@ async def test_registry_initialize_all():
     assert agent2.initialized is True
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_registry_shutdown_all():
     """Test shutting down all registered agents"""
@@ -306,6 +320,7 @@ async def test_registry_shutdown_all():
     assert agent2.status == AgentStatus.SHUTDOWN
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_registry_metrics():
     """Test registry metrics"""
@@ -326,6 +341,7 @@ async def test_registry_metrics():
 
 # ===== Test CommunicationChannel =====
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_communication_start_stop():
     """Test starting and stopping communication channel"""
@@ -338,6 +354,7 @@ async def test_communication_start_stop():
     assert channel._running is False
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_communication_publish_subscribe():
     """Test publishing and subscribing to messages"""
@@ -368,6 +385,7 @@ async def test_communication_publish_subscribe():
     await channel.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_communication_wildcard_subscription():
     """Test wildcard subscription to all messages"""
@@ -396,6 +414,7 @@ async def test_communication_wildcard_subscription():
     await channel.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_communication_request_response():
     """Test request-response pattern"""
@@ -431,6 +450,7 @@ async def test_communication_request_response():
     await channel.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_communication_request_timeout():
     """Test request timeout"""
@@ -450,6 +470,7 @@ async def test_communication_request_timeout():
     await channel.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_communication_message_history():
     """Test message history"""
@@ -474,6 +495,7 @@ async def test_communication_message_history():
     await channel.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_communication_metrics():
     """Test communication channel metrics"""
@@ -494,6 +516,7 @@ async def test_communication_metrics():
 
 # ===== Test TaskQueue =====
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_task_queue_start_stop():
     """Test starting and stopping task queue"""
@@ -506,6 +529,7 @@ async def test_task_queue_start_stop():
     assert queue._running is False
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_task_submit():
     """Test submitting a task"""
@@ -527,6 +551,7 @@ async def test_task_submit():
     await queue.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_task_cancel():
     """Test cancelling a task"""
@@ -547,6 +572,7 @@ async def test_task_cancel():
     await queue.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_task_get():
     """Test getting a task by ID"""
@@ -567,6 +593,7 @@ async def test_task_get():
     await queue.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_task_get_agent_tasks():
     """Test getting tasks for a specific agent"""
@@ -587,6 +614,7 @@ async def test_task_get_agent_tasks():
     await queue.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_task_priority_ordering():
     """Test task priority ordering"""
@@ -622,6 +650,7 @@ async def test_task_priority_ordering():
     await queue.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_task_queue_metrics():
     """Test task queue metrics"""
@@ -640,6 +669,7 @@ async def test_task_queue_metrics():
     await queue.stop()
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_task_status_callbacks():
     """Test task status change callbacks"""

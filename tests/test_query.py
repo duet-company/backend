@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from app.models.query import Query, QueryStatus, QueryType
 
 
+@pytest.mark.unit
 class TestQueryModel:
     """Test suite for Query model."""
 

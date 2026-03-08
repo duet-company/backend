@@ -16,6 +16,7 @@ from app.core.security import (
 from app.auth.schemas import UserCreate, UserLogin
 
 
+@pytest.mark.unit
 class TestPasswordHashing:
     """Test password hashing functionality."""
 
@@ -54,6 +55,7 @@ class TestPasswordHashing:
         assert hash1 != hash2
 
 
+@pytest.mark.unit
 class TestJWTTokens:
     """Test JWT token generation and validation."""
 
@@ -114,6 +116,7 @@ class TestJWTTokens:
         # In production, proper expiration handling is important
 
 
+@pytest.mark.unit
 class TestUserSchemas:
     """Test Pydantic schemas for user authentication."""
 
@@ -158,6 +161,7 @@ class TestUserSchemas:
         assert login_data.password == "securepassword123"
 
 
+@pytest.mark.unit
 class TestTokenSchema:
     """Test Token schema."""
 
@@ -176,6 +180,7 @@ class TestTokenSchema:
         assert token_data.expires_in == 3600
 
 
+@pytest.mark.unit
 class TestUserResponseSchema:
     """Test UserResponse schema."""
 
