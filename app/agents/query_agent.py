@@ -3,11 +3,19 @@ Query Agent (NL → SQL)
 
 AI agent that translates natural language queries into SQL for ClickHouse
 and executes them, returning formatted results.
+
+Enhanced with:
+- Query result caching
+- Query optimization hints
+- Query explanation features
+- Multi-dialect SQL support
+- Performance metrics tracking
 """
 
 import logging
 import os
 import json
+import time
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import httpx
@@ -16,6 +24,9 @@ from clickhouse_driver import Client as ClickHouseClient
 from app.agents.base import BaseAgent, AgentConfig, AgentStatus
 from app.models.query import Query as QueryModel, QueryStatus, QueryType
 from app.core.database import SessionLocal
+from app.agents.query_cache import QueryCache
+from app.agents.query_optimizer import QueryOptimizer
+from app.agents.query_explainer import QueryExplainer, SQLDialect
 
 
 logger = logging.getLogger("agents.query_agent")
@@ -141,6 +152,8 @@ class QueryAgent(BaseAgent):
     """
     AI Query Agent that translates natural language to SQL and executes queries.
 
+    Enhanced with caching, optimization, and explanation features.
+
     Configuration:
         llm_api_key: API key for LLM (OpenAI, Anthropic, etc.)
         llm_provider: "openai" or "anthropic" (default: openai)
@@ -148,6 +161,11 @@ class QueryAgent(BaseAgent):
         clickhouse_url: ClickHouse connection URL
         max_results: Maximum rows to return (default: 1000)
         enable_sql_validation: Validate generated SQL (default: True)
+        enable_cache: Enable query result caching (default: True)
+        cache_ttl_seconds: Cache TTL in seconds (default: 3600)
+        enable_optimization: Enable query optimization hints (default: True)
+        enable_explanation: Enable query explanation (default: True)
+        sql_dialect: SQL dialect for explanation (default: clickhouse)
     """
 
     def __init__(self, config: AgentConfig):
@@ -162,9 +180,35 @@ class QueryAgent(BaseAgent):
         )
         self.max_results = config.config.get("max_results", 1000)
         self.enable_sql_validation = config.config.get("enable_sql_validation", True)
+        self.enable_cache = config.config.get("enable_cache", True)
+        self.cache_ttl_seconds = config.config.get("cache_ttl_seconds", 3600)
+        self.enable_optimization = config.config.get("enable_optimization", True)
+        self.enable_explanation = config.config.get("enable_explanation", True)
+
+        # Parse SQL dialect
+        dialect_str = config.config.get("sql_dialect", "clickhouse").lower()
+        try:
+            self.sql_dialect = SQLDialect(dialect_str)
+        except ValueError:
+            logger.warning(f"Unsupported SQL dialect: {dialect_str}, using clickhouse")
+            self.sql_dialect = SQLDialect.CLICKHOUSE
 
         self.schema_loader: Optional[ClickHouseSchemaLoader] = None
         self.db: Optional[SessionLocal] = None
+        self.query_cache: Optional[QueryCache] = None
+        self.query_optimizer: Optional[QueryOptimizer] = None
+        self.query_explainer: Optional[QueryExplainer] = None
+
+        # Performance metrics
+        self._query_metrics: Dict[str, Any] = {
+            "total_queries": 0,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "total_generation_time_ms": 0,
+            "total_execution_time_ms": 0,
+            "sql_errors": 0,
+            "optimization_applied": 0
+        }
 
     async def _on_initialize(self) -> None:
         """Initialize Query Agent - load schema and connect to databases"""
@@ -181,39 +225,72 @@ class QueryAgent(BaseAgent):
         schema = self.schema_loader.get_schema()
         logger.info(f"Query Agent initialized with {len(schema['tables'])} tables")
 
+        # Initialize query cache (if enabled)
+        if self.enable_cache:
+            self.query_cache = QueryCache(
+                max_entries=self.config.config.get("cache_max_entries", 1000),
+                max_memory_mb=self.config.config.get("cache_max_memory_mb", 100),
+                ttl_seconds=self.cache_ttl_seconds
+            )
+            logger.info("Query cache enabled")
+
+        # Initialize query optimizer (if enabled)
+        if self.enable_optimization:
+            self.query_optimizer = QueryOptimizer()
+            logger.info("Query optimizer enabled")
+
+        # Initialize query explainer (if enabled)
+        if self.enable_explanation:
+            self.query_explainer = QueryExplainer(dialect=self.sql_dialect)
+            logger.info(f"Query explainer enabled (dialect: {self.sql_dialect.value})")
+
     async def _on_shutdown(self) -> None:
         """Shutdown Query Agent - close connections"""
         logger.info("Shutting down Query Agent")
+
+        # Log final cache stats
+        if self.query_cache:
+            cache_stats = self.query_cache.get_stats()
+            logger.info(f"Cache stats: {cache_stats}")
 
         if self.schema_loader:
             self.schema_loader.disconnect()
 
     async def _on_process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Process a natural language query.
+        Process a natural language query with enhanced features.
 
         Args:
             input_data: Must contain:
                 - query: Natural language query string
                 - user_id: (optional) user ID for logging
+                - generate_explanation: (optional) Whether to generate explanation (default: config)
+                - apply_optimization: (optional) Whether to apply optimization hints (default: config)
 
         Returns:
             Dict with:
                 - natural_language: original query
-                - generated_sql: SQL that was generated
+                - generated_sql: SQL that was generated (possibly optimized)
                 - columns: list of column names
                 - rows: list of result rows
                 - row_count: number of rows returned
                 - execution_time_ms: query execution time
                 - formatted_output: human-readable result string
+                - cache_hit: (bool) whether result was from cache
+                - optimization_applied: (list) optimization hints applied
+                - explanation: (optional) query explanation if requested
+                - metrics: performance metrics for this query
         """
         natural_query = input_data.get("query")
         user_id = input_data.get("user_id")
+        generate_explanation = input_data.get("generate_explanation", self.enable_explanation)
+        apply_optimization = input_data.get("apply_optimization", self.enable_optimization)
 
         if not natural_query:
             raise ValueError("Missing required field: query")
 
         logger.info(f"Processing query: {natural_query}")
+        start_total_time = time.time()
 
         # Create query record
         query_record = QueryModel(
@@ -224,46 +301,136 @@ class QueryAgent(BaseAgent):
         )
         query_record.save()
 
-        try:
-            # Get schema for LLM context
-            schema_text = self.schema_loader.format_schema_for_prompt()
+        # Get schema for multiple purposes
+        schema_text = self.schema_loader.format_schema_for_prompt()
+        schema_dict = self.schema_loader.get_schema()
 
+        # Check cache first (if enabled)
+        cached_result = None
+        if self.enable_cache and self.query_cache:
+            cached_result = self.query_cache.get(natural_query, schema_text)
+            if cached_result:
+                self._query_metrics["cache_hits"] += 1
+                logger.info(f"Cache hit for query: {natural_query[:50]}...")
+                return {
+                    **cached_result,
+                    "cache_hit": True,
+                    "metrics": {
+                        "generation_time_ms": 0,
+                        "execution_time_ms": 0,
+                        "total_time_ms": int((time.time() - start_total_time) * 1000),
+                        "cache_hit": True
+                    }
+                }
+            else:
+                self._query_metrics["cache_misses"] += 1
+
+        try:
             # Generate SQL using LLM
+            gen_start = time.time()
             sql = await self._generate_sql(natural_query, schema_text)
-            query_record.generated_sql = sql
+            generation_time_ms = int((time.time() - gen_start) * 1000)
+
+            self._query_metrics["total_generation_time_ms"] += generation_time_ms
+            self._query_metrics["total_queries"] += 1
+
             logger.info(f"Generated SQL: {sql}")
+            query_record.generated_sql = sql
+
+            # Apply optimization hints if requested
+            optimization_applied = []
+            if apply_optimization and self.query_optimizer:
+                optimized_sql = self.query_optimizer.analyze_and_optimize(sql, schema_dict)
+                if optimized_sql != sql:
+                    sql = optimized_sql
+                    optimization_applied = [
+                        hint["hint"] for hint in self.query_optimizer.get_hints()
+                    ]
+                    self._query_metrics["optimization_applied"] += len(optimization_applied)
+                    logger.info(f"Applied {len(optimization_applied)} optimization hints")
 
             # Validate SQL (basic safety checks)
             if self.enable_sql_validation:
                 self._validate_sql(sql)
 
             # Execute query against ClickHouse
+            exec_start = time.time()
             rows, column_names, exec_time_ms = await self._execute_query(sql)
+            execution_time_ms = int((time.time() - exec_start) * 1000)
+
+            self._query_metrics["total_execution_time_ms"] += execution_time_ms
 
             # Format results
             formatted = self._format_results(rows, column_names)
+
+            # Build result dictionary
+            result = {
+                "natural_language": natural_query,
+                "generated_sql": sql,
+                "optimization_applied": optimization_applied,
+                "columns": column_names,
+                "rows": rows,
+                "row_count": len(rows),
+                "execution_time_ms": execution_time_ms,
+                "formatted_output": formatted,
+                "query_id": query_record.id,
+                "cache_hit": False,
+                "metrics": {
+                    "generation_time_ms": generation_time_ms,
+                    "execution_time_ms": execution_time_ms,
+                    "total_time_ms": int((time.time() - start_total_time) * 1000),
+                    "cache_hit": False
+                }
+            }
+
+            # Add explanation if requested
+            if generate_explanation and self.query_explainer:
+                explanation = self.query_explainer.explain(
+                    sql,
+                    natural_language_query=natural_query,
+                    schema=schema_dict
+                )
+                result["explanation"] = {
+                    "query_type": explanation.query_type,
+                    "complexity": explanation.complexity,
+                    "tables_accessed": explanation.tables_accessed,
+                    "columns_accessed": explanation.columns_accessed,
+                    "optimization_hints": explanation.optimization_hints,
+                    "potential_issues": explanation.potential_issues,
+                    "recommendations": explanation.recommendations,
+                    "formatted_explanation": self.query_explainer.format_explanation(explanation)
+                }
+
+            # Cache the result (if enabled)
+            if self.enable_cache and self.query_cache:
+                cache_result = {
+                    "natural_language": natural_query,
+                    "generated_sql": sql,
+                    "optimization_applied": optimization_applied,
+                    "columns": column_names,
+                    "rows": rows,
+                    "row_count": len(rows),
+                    "execution_time_ms": execution_time_ms,
+                    "formatted_output": formatted
+                }
+                if generate_explanation and self.query_explainer:
+                    cache_result["explanation"] = result["explanation"]
+
+                self.query_cache.set(natural_query, sql, cache_result, schema_text)
 
             # Update query record
             query_record.mark_completed(
                 result_data={"rows": rows, "columns": column_names},
                 row_count=len(rows),
-                execution_time_ms=exec_time_ms
+                execution_time_ms=execution_time_ms
             )
 
-            return {
-                "natural_language": natural_query,
-                "generated_sql": sql,
-                "columns": column_names,
-                "rows": rows,
-                "row_count": len(rows),
-                "execution_time_ms": exec_time_ms,
-                "formatted_output": formatted,
-                "query_id": query_record.id
-            }
+            return result
 
         except Exception as e:
             query_record.mark_failed(error_message=str(e))
             logger.error(f"Query failed: {e}")
+            self._query_metrics["sql_errors"] += 1
             raise
 
     async def _generate_sql(self, natural_query: str, schema_text: str) -> str:
@@ -371,6 +538,36 @@ Rules:
 
         # If no code blocks, assume whole response is SQL
         return response_text.strip()
+
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """
+        Get performance metrics for the query agent.
+
+        Returns:
+            Dictionary with performance statistics
+        """
+        metrics = self._query_metrics.copy()
+
+        # Calculate derived metrics
+        total_queries = metrics["total_queries"]
+        if total_queries > 0:
+            metrics["avg_generation_time_ms"] = metrics["total_generation_time_ms"] / total_queries
+            metrics["avg_execution_time_ms"] = metrics["total_execution_time_ms"] / total_queries
+            metrics["success_rate"] = (total_queries - metrics["sql_errors"]) / total_queries
+        else:
+            metrics["avg_generation_time_ms"] = 0
+            metrics["avg_execution_time_ms"] = 0
+            metrics["success_rate"] = 1.0
+
+        # Get cache stats if available
+        if self.query_cache:
+            cache_stats = self.query_cache.get_stats()
+            metrics["cache"] = cache_stats
+
+        # Add agent metrics
+        metrics.update(self.metrics)
+
+        return metrics
 
     def _validate_sql(self, sql: str) -> None:
         """
