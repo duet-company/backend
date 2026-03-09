@@ -14,8 +14,7 @@ import asyncio
 from app.core.metrics import (
     AGENT_ACTIVE_TASKS, AGENT_QUEUE_SIZE, DB_CONNECTIONS,
     DB_CONNECTION_POOL, SYSTEM_MEMORY_USAGE, SYSTEM_CPU_USAGE,
-    TASK_QUEUE_SIZE, DATA_SOURCE_STATUS, API_ACTIVE_REQUESTS,
-    record_error
+    TASK_QUEUE_SIZE, DATA_SOURCE_STATUS, API_ACTIVE_REQUESTS
 )
 from app.agents.registry import get_all
 
