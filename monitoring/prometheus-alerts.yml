@@ -1,0 +1,216 @@
+# Prometheus Alerting Rules for AI Data Labs
+# These rules define when alerts should be triggered based on metrics
+
+groups:
+  - name: api_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighAPIErrorRate
+        expr: rate(ai_datalabs_api_requests_total{status="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: High API error rate detected
+          description: "API error rate is {{ $value }} errors/sec for {{ $labels.endpoint }}"
+
+      # High latency
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(ai_datalabs_api_latency_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: High API latency detected
+          description: "P95 API latency is {{ $value }}s for {{ $labels.endpoint }}"
+
+      # API service down
+      - alert: APIServiceDown
+        expr: up{job="ai-datalabs-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: API service is down
+          description: "API service {{ $labels.instance }} has been down for more than 2 minutes"
+
+  - name: agent_alerts
+    interval: 30s
+    rules:
+      # Agent execution errors
+      - alert: HighAgentErrorRate
+        expr: rate(ai_datalabs_agent_executions_total{status="error"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: agent
+        annotations:
+          summary: High agent error rate
+          description: "Agent {{ $labels.agent_name }} error rate is {{ $value }} errors/sec"
+
+      # Agent queue backlog
+      - alert: AgentQueueBacklog
+        expr: ai_datalabs_agent_queue_size > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: agent
+        annotations:
+          summary: Agent queue backlog detected
+          description: "Agent {{ $labels.agent_name }} has {{ $value }} tasks in queue"
+
+      # Agent slow execution
+      - alert: SlowAgentExecution
+        expr: histogram_quantile(0.95, rate(ai_datalabs_agent_latency_seconds_bucket[5m])) > 60
+        for: 10m
+        labels:
+          severity: warning
+          component: agent
+        annotations:
+          summary: Slow agent execution detected
+          description: "Agent {{ $labels.agent_name }} P95 execution time is {{ $value }}s"
+
+      # LLM API errors
+      - alert: HighLLMErrorRate
+        expr: rate(ai_datalabs_llm_requests_total{status="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: llm
+        annotations:
+          summary: High LLM API error rate
+          description: "LLM {{ $labels.provider }}/{{ $labels.model }} error rate is {{ $value }} errors/sec"
+
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # Database connection pool exhaustion
+      - alert: DatabasePoolExhausted
+        expr: |
+          ai_datalabs_db_connections_active /
+          ai_datalabs_db_connection_pool_size > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: Database connection pool nearly exhausted
+          description: "{{ $labels.db_type }} pool is {{ $value | humanizePercentage }} used"
+
+      # Slow database queries
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, rate(ai_datalabs_db_query_latency_seconds_bucket[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: Slow database queries detected
+          description: "P95 query latency for {{ $labels.db_type }} is {{ $value }}s"
+
+      # Database query errors
+      - alert: HighDatabaseErrorRate
+        expr: rate(ai_datalabs_db_queries_total{status="error"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: High database error rate
+          description: "{{ $labels.db_type }} error rate is {{ $value }} errors/sec"
+
+  - name: system_alerts
+    interval: 30s
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: ai_datalabs_system_cpu_usage_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: High CPU usage detected
+          description: "CPU usage is {{ $value }}%"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          ai_datalabs_system_memory_usage_bytes /
+          node_memory_MemTotal_bytes > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: High memory usage detected
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} /
+           node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: Low disk space detected
+          description: "Root filesystem has less than 10% free space"
+
+  - name: query_alerts
+    interval: 30s
+    rules:
+      # High query error rate
+      - alert: HighQueryErrorRate
+        expr: rate(ai_datalabs_query_executions_total{status="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: query
+        annotations:
+          summary: High query error rate
+          description: "Query error rate is {{ $value }} errors/sec"
+
+      # Slow query execution
+      - alert: SlowQueryExecution
+        expr: histogram_quantile(0.95, rate(ai_datalabs_query_latency_seconds_bucket[5m])) > 10
+        for: 10m
+        labels:
+          severity: warning
+          component: query
+        annotations:
+          summary: Slow query execution detected
+          description: "P95 query latency is {{ $value }}s"
+
+  - name: task_queue_alerts
+    interval: 30s
+    rules:
+      # Task queue backlog
+      - alert: TaskQueueBacklog
+        expr: ai_datalabs_task_queue_size > 500
+        for: 10m
+        labels:
+          severity: warning
+          component: task_queue
+        annotations:
+          summary: Task queue backlog detected
+          description: "Queue {{ $labels.queue_name }} has {{ $value }} pending tasks"
+
+      # High task failure rate
+      - alert: HighTaskFailureRate
+        expr: |
+          rate(ai_datalabs_task_processed_total{status="error"}[5m]) /
+          rate(ai_datalabs_task_processed_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: task_queue
+        annotations:
+          summary: High task failure rate
+          description: "Task failure rate is {{ $value | humanizePercentage }} for queue {{ $labels.queue_name }}"

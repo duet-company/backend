@@ -1,0 +1,85 @@
+# AI Data Labs - Logging Configuration
+# Structured logging with JSON format for log aggregation
+
+version: 1
+
+formatters:
+  json:
+    class: 'pythonjsonlogger.jsonlogger.JsonFormatter'
+    format: '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d %(funcName)s'
+
+  standard:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: json
+    stream: ext://sys.stdout
+
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: /var/log/ai-datalabs/app.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 10
+
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: json
+    filename: /var/log/ai-datalabs/error.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 10
+
+  # Send to Loki for log aggregation
+  loki:
+    class: 'loki_handler.LokiHandler'
+    level: INFO
+    formatter: json
+    url: 'http://loki:3100/loki/api/v1/push'
+    tags:
+      app: 'ai-datalabs-api'
+      environment: '${ENVIRONMENT:development}'
+
+loggers:
+  '':
+    level: INFO
+    handlers: [console, file, error_file]
+    propagate: false
+
+  'app':
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+  'app.api':
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+  'app.agents':
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+  'app.core':
+    level: DEBUG
+    handlers: [file]
+    propagate: false
+
+  'uvicorn':
+    level: INFO
+    handlers: [console]
+    propagate: false
+
+  'uvicorn.access':
+    level: INFO
+    handlers: [console]
+    propagate: false
+
+root:
+  level: INFO
+  handlers: [console]
