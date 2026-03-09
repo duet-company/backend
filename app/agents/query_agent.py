@@ -228,8 +228,8 @@ class QueryAgent(BaseAgent):
         # Initialize query cache (if enabled)
         if self.enable_cache:
             self.query_cache = QueryCache(
-                max_entries=config.config.get("cache_max_entries", 1000),
-                max_memory_mb=config.config.get("cache_max_memory_mb", 100),
+                max_entries=self.config.config.get("cache_max_entries", 1000),
+                max_memory_mb=self.config.config.get("cache_max_memory_mb", 100),
                 ttl_seconds=self.cache_ttl_seconds
             )
             logger.info("Query cache enabled")
