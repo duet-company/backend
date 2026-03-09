@@ -16,7 +16,7 @@ from app.core.metrics import (
     DB_CONNECTION_POOL, SYSTEM_MEMORY_USAGE, SYSTEM_CPU_USAGE,
     TASK_QUEUE_SIZE, DATA_SOURCE_STATUS, API_ACTIVE_REQUESTS
 )
-from app.agents.registry import get_all
+from app.agents import registry
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -151,7 +151,7 @@ async def health_check():
         overall_healthy = False
 
     # Check agents
-    agents = get_all()
+    agents = registry.get_all()
     response.components["agents"] = {
         "status": "healthy",
         "count": len(agents),
@@ -214,7 +214,7 @@ async def readiness_check():
         db_gen.close()
 
         # Check if agents are initialized
-        agents = get_all()
+        agents = registry.get_all()
         if len(agents) == 0:
             raise HTTPException(status_code=503, detail="Agents not initialized")
 
@@ -247,7 +247,7 @@ async def get_platform_metrics():
     """
     try:
         # Get agent metrics
-        agents = get_all()
+        agents = registry.get_all()
         agent_metrics = {}
         for agent_name in agents:
             agent_metrics[agent_name] = {
@@ -343,7 +343,7 @@ async def get_agents_status():
     Get status of all AI agents.
     """
     try:
-        agents = get_all()
+        agents = registry.get_all()
         agent_status = {}
 
         for name, agent in agents.items():
@@ -370,7 +370,7 @@ async def get_agent_metrics(agent_name: str):
     Get metrics for a specific agent.
     """
     try:
-        agents = get_all()
+        agents = registry.get_all()
         if agent_name not in agents:
             raise HTTPException(status_code=404, detail=f"Agent {agent_name} not found")
 
