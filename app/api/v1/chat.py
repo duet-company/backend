@@ -18,12 +18,15 @@ from app.core.security import get_current_active_user
 from app.core.database import get_db
 from app.models.chat import Chat
 from app.agents.query_agent import create_query_agent
+from app.agents import registry
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Global query agent instance (will be initialized on startup)
+# Global agent instances (will be initialized on startup)
 _query_agent = None
+_design_agent = None
+_support_agent = None
 
 
 async def get_query_agent():
@@ -35,12 +38,66 @@ async def get_query_agent():
     return _query_agent
 
 
+async def get_design_agent():
+    """Get or create the design agent instance."""
+    global _design_agent
+    if _design_agent is None:
+        _design_agent = registry.get("design_agent")
+        if _design_agent and hasattr(_design_agent, 'initialize'):
+            await _design_agent.initialize()
+    return _design_agent
+
+
+async def get_support_agent():
+    """Get or create the support agent instance."""
+    global _support_agent
+    if _support_agent is None:
+        _support_agent = registry.get("support_agent")
+        if _support_agent and hasattr(_support_agent, 'initialize'):
+            await _support_agent.initialize()
+    return _support_agent
+
+
+async def detect_agent_intent(message: str) -> str:
+    """
+    Detect which agent should handle the message based on intent.
+
+    Returns: 'query', 'design', 'support', or 'query' (default)
+    """
+    message_lower = message.lower()
+
+    # Platform design intent keywords
+    design_keywords = [
+        'create platform', 'setup platform', 'design infrastructure',
+        'deploy platform', 'kubernetes', 'database setup', 'infrastructure',
+        'design agent', 'platform designer', 'setup data platform'
+    ]
+
+    # Support intent keywords
+    support_keywords = [
+        'help', 'support', 'how do i', 'how to', 'troubleshoot',
+        'error', 'problem', 'issue', 'bug', 'not working'
+    ]
+
+    # Check design intent
+    if any(keyword in message_lower for keyword in design_keywords):
+        return 'design'
+
+    # Check support intent
+    if any(keyword in message_lower for keyword in support_keywords):
+        return 'support'
+
+    # Default to query agent
+    return 'query'
+
+
 # Pydantic models for request/response
 class SendMessageRequest(BaseModel):
     """Request to send a message"""
     message: str = Field(..., description="User message", min_length=1)
     chat_id: Optional[int] = Field(None, description="Chat ID (null for new chat)")
     title: Optional[str] = Field(None, description="Title for new chat")
+    agent_type: Optional[str] = Field(None, description="Agent type: 'query', 'design', 'support', or 'auto' (default)")
 
 
 class SendMessageResponse(BaseModel):
@@ -127,40 +184,98 @@ async def send_message(
     )
 
     try:
-        # Get query agent
-        agent = await get_query_agent()
+        # Determine which agent to use
+        agent_type = request.agent_type or 'auto'
+        if agent_type == 'auto':
+            agent_type = await detect_agent_intent(request.message)
 
-        # Check if this looks like a data query
-        is_data_query = any(keyword in request.message.lower() for keyword in [
-            "show", "get", "what", "how many", "count", "list", "find", "search",
-            "average", "sum", "total", "top", "bottom"
-        ])
+        logger.info(f"Routing to agent: {agent_type}")
+
+        # Get the appropriate agent
+        if agent_type == 'design':
+            agent = await get_design_agent()
+            if not agent:
+                logger.warning("Design agent not available, falling back to query agent")
+                agent = await get_query_agent()
+                agent_type = 'query'
+        elif agent_type == 'support':
+            agent = await get_support_agent()
+            if not agent:
+                logger.warning("Support agent not available, falling back to query agent")
+                agent = await get_query_agent()
+                agent_type = 'query'
+        else:
+            agent = await get_query_agent()
+            agent_type = 'query'
 
         response_text = ""
         query_result = None
+        is_data_query = (agent_type == 'query')
 
-        if is_data_query:
-            # Process as data query
+        if agent_type == 'query':
+            # Check if this looks like a data query
+            is_data_query_check = any(keyword in request.message.lower() for keyword in [
+                "show", "get", "what", "how many", "count", "list", "find", "search",
+                "average", "sum", "total", "top", "bottom"
+            ])
+
+            if is_data_query_check:
+                # Process as data query
+                try:
+                    result = await agent._on_process({
+                        "query": request.message,
+                        "user_id": user_id
+                    })
+
+                    # Format result as natural language
+                    if result["rows"]:
+                        response_text = f"Query executed successfully.\n\n{result['formatted_output']}\n\nGenerated SQL:\n```sql\n{result['generated_sql']}\n```"
+                    else:
+                        response_text = "No results found for your query."
+
+                    query_result = result
+
+                except Exception as e:
+                    logger.error(f"Query failed: {e}")
+                    response_text = f"I encountered an error while processing your query: {str(e)}"
+            else:
+                # General conversational response
+                response_text = "I'm your AI Data Assistant! I can help you query your data using natural language. Try asking me to show, count, or analyze your data."
+
+        elif agent_type == 'design':
+            # Process with Platform Designer Agent
             try:
-                result = await agent._on_process({
+                result = await agent.process({
+                    "action": "design",
                     "query": request.message,
                     "user_id": user_id
                 })
 
-                # Format result as natural language
-                if result["rows"]:
-                    response_text = f"Query executed successfully.\n\n{result['formatted_output']}\n\nGenerated SQL:\n```sql\n{result['generated_sql']}\n```"
+                if result.get("success"):
+                    response_text = f"Platform design processed successfully.\n\n{result.get('message', '')}"
+                    query_result = result
                 else:
-                    response_text = "No results found for your query."
+                    response_text = f"Design agent response: {result.get('message', 'No specific message')}"
 
+            except Exception as e:
+                logger.error(f"Design agent error: {e}")
+                response_text = f"I encountered an error with the design agent: {str(e)}"
+
+        elif agent_type == 'support':
+            # Process with Support Agent
+            try:
+                result = await agent.process({
+                    "action": "support",
+                    "query": request.message,
+                    "user_id": user_id
+                })
+
+                response_text = result.get("response", "Support agent response received.")
                 query_result = result
 
             except Exception as e:
-                logger.error(f"Query failed: {e}")
-                response_text = f"I encountered an error while processing your query: {str(e)}"
-        else:
-            # General conversational response
-            response_text = "I'm your AI Data Assistant! I can help you query your data using natural language. Try asking me to show, count, or analyze your data."
+                logger.error(f"Support agent error: {e}")
+                response_text = f"I encountered an error with the support agent: {str(e)}"
 
         # Add assistant response
         chat.add_message(
@@ -168,7 +283,8 @@ async def send_message(
             content=response_text,
             metadata={
                 "query_result": query_result,
-                "is_data_query": is_data_query
+                "is_data_query": is_data_query,
+                "agent_type": agent_type
             }
         )
 
@@ -255,16 +371,39 @@ async def send_message_stream(
             # Send message ID
             yield f"event: message_id\ndata: {json.dumps({'message_id': message_id})}\n\n"
 
-            # Get query agent
-            agent = await get_query_agent()
+            # Determine which agent to use
+            agent_type = request.agent_type or 'auto'
+            if agent_type == 'auto':
+                agent_type = await detect_agent_intent(request.message)
 
-            # Check if this is a data query
-            is_data_query = any(keyword in request.message.lower() for keyword in [
-                "show", "get", "what", "how many", "count", "list", "find", "search",
-                "average", "sum", "total", "top", "bottom"
-            ])
+            logger.info(f"Streaming: Routing to agent: {agent_type}")
 
-            if is_data_query:
+            # Get the appropriate agent
+            if agent_type == 'design':
+                agent = await get_design_agent()
+                if not agent:
+                    logger.warning("Design agent not available, falling back to query agent")
+                    agent = await get_query_agent()
+                    agent_type = 'query'
+            elif agent_type == 'support':
+                agent = await get_support_agent()
+                if not agent:
+                    logger.warning("Support agent not available, falling back to query agent")
+                    agent = await get_query_agent()
+                    agent_type = 'query'
+            else:
+                agent = await get_query_agent()
+                agent_type = 'query'
+
+            # Check if this is a data query (only for query agent)
+            is_data_query = (agent_type == 'query') and any(
+                keyword in request.message.lower() for keyword in [
+                    "show", "get", "what", "how many", "count", "list", "find", "search",
+                    "average", "sum", "total", "top", "bottom"
+                ]
+            )
+
+            if agent_type == 'query' and is_data_query:
                 # Send thinking status
                 yield "event: status\ndata: {\"status\": \"thinking\", \"message\": \"Processing your query...\"}\n\n"
 
@@ -303,13 +442,127 @@ async def send_message_stream(
                         content=full_response,
                         metadata={
                             "query_result": result,
-                            "is_data_query": True
+                            "is_data_query": True,
+                            "agent_type": "query"
                         }
                     )
 
                     # Update context
                     chat.update_context("last_query", request.message)
                     chat.update_context("last_sql", result.get("generated_sql"))
+
+            elif agent_type == 'design':
+                # Process with Platform Designer Agent
+                yield "event: status\ndata: {\"status\": \"thinking\", \"message\": \"Processing platform design...\"}\n\n"
+
+                try:
+                    result = await agent.process({
+                        "action": "design",
+                        "query": request.message,
+                        "user_id": user_id
+                    })
+
+                    # Format response
+                    if result.get("success"):
+                        response_parts = [
+                            "Platform design processed successfully.\n\n",
+                            result.get('message', ''),
+                            "\n\n",
+                            str(result.get('details', ''))
+                        ]
+                    else:
+                        response_parts = [result.get('message', 'Design agent response received.')]
+
+                    # Stream each part
+                    full_response = ""
+                    for part in response_parts:
+                        for char in part:
+                            full_response += char
+                            yield f"event: message\ndata: {json.dumps({'content': char})}\n\n"
+                            await asyncio.sleep(0.01)
+
+                    # Save assistant response
+                    chat.add_message(
+                        role="assistant",
+                        content=full_response,
+                        metadata={
+                            "query_result": result,
+                            "is_data_query": False,
+                            "agent_type": "design"
+                        }
+                    )
+
+                    chat.update_context("last_design", request.message)
+
+                except Exception as e:
+                    error_msg = f"I encountered an error with the design agent: {str(e)}"
+                    for char in error_msg:
+                        yield f"event: message\ndata: {json.dumps({'content': char})}\n\n"
+                        await asyncio.sleep(0.01)
+
+                    chat.add_message(
+                        role="assistant",
+                        content=error_msg,
+                        metadata={"error": True, "agent_type": "design"}
+                    )
+
+            elif agent_type == 'support':
+                # Process with Support Agent
+                yield "event: status\ndata: {\"status\": \"thinking\", \"message\": \"Getting support...\"}\n\n"
+
+                try:
+                    result = await agent.process({
+                        "action": "support",
+                        "query": request.message,
+                        "user_id": user_id
+                    })
+
+                    response = result.get("response", "Support agent response received.")
+
+                    # Stream response
+                    full_response = ""
+                    for char in response:
+                        full_response += char
+                        yield f"event: message\ndata: {json.dumps({'content': char})}\n\n"
+                        await asyncio.sleep(0.01)
+
+                    # Save assistant response
+                    chat.add_message(
+                        role="assistant",
+                        content=full_response,
+                        metadata={
+                            "query_result": result,
+                            "is_data_query": False,
+                            "agent_type": "support"
+                        }
+                    )
+
+                    chat.update_context("last_support", request.message)
+
+                except Exception as e:
+                    error_msg = f"I encountered an error with the support agent: {str(e)}"
+                    for char in error_msg:
+                        yield f"event: message\ndata: {json.dumps({'content': char})}\n\n"
+                        await asyncio.sleep(0.01)
+
+                    chat.add_message(
+                        role="assistant",
+                        content=error_msg,
+                        metadata={"error": True, "agent_type": "support"}
+                    )
+
+            else:
+                # General conversational response (query agent without data query)
+                response = "I'm your AI Data Assistant! I can help you query your data using natural language. Try asking me to show, count, or analyze your data."
+                for char in response:
+                    yield f"event: message\ndata: {json.dumps({'content': char})}\n\n"
+                    await asyncio.sleep(0.01)
+
+                chat.add_message(
+                    role="assistant",
+                    content=response,
+                    metadata={"is_data_query": False, "agent_type": "query"}
+                )
 
                 except Exception as e:
                     error_msg = f"I encountered an error: {str(e)}"
@@ -464,35 +717,64 @@ async def get_suggestions():
     No authentication required for suggestions.
     """
     suggestions = [
+        # Query Agent suggestions
         MessageSuggestion(
             text="Show me the top 10 records",
             icon="📊",
-            category="data"
+            category="query"
         ),
         MessageSuggestion(
             text="How many rows are in the data?",
             icon="🔢",
-            category="data"
+            category="query"
         ),
         MessageSuggestion(
             text="What's the average value of the numeric columns?",
             icon="📈",
-            category="analytics"
+            category="query"
         ),
         MessageSuggestion(
             text="Find records with missing values",
             icon="🔍",
-            category="data"
+            category="query"
         ),
+        # Design Agent suggestions
+        MessageSuggestion(
+            text="Create a new data platform for analytics",
+            icon="🏗️",
+            category="design"
+        ),
+        MessageSuggestion(
+            text="Setup ClickHouse database cluster",
+            icon="🗄️",
+            category="design"
+        ),
+        MessageSuggestion(
+            text="Design a Kubernetes infrastructure for data pipeline",
+            icon="☸️",
+            category="design"
+        ),
+        # Support Agent suggestions
+        MessageSuggestion(
+            text="How do I connect to my database?",
+            icon="❓",
+            category="support"
+        ),
+        MessageSuggestion(
+            text="Troubleshoot query performance issues",
+            icon="🔧",
+            category="support"
+        ),
+        # General
         MessageSuggestion(
             text="Show me data from the last 7 days",
             icon="📅",
-            category="time"
+            category="query"
         ),
         MessageSuggestion(
             text="Group and count by category",
             icon="📋",
-            category="analytics"
+            category="query"
         )
     ]
 
